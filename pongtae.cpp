@@ -1,5 +1,7 @@
 #include "raylib.h"
 #include <iostream>
+#include <chrono>
+#include <thread>
 
 using namespace std;
 
@@ -7,6 +9,8 @@ Color Dark_Blue   = {28, 37, 65, 255};
 Color Light_Blue  = {58, 80, 107, 255};
 Color Super_Light_Blue  = {78, 165, 217, 100};
 Color Light_Green = {111, 255, 233, 255};
+
+bool start_off = true;
 
 int player_score = 0;
 int bot_score = 0;
@@ -21,7 +25,8 @@ public:
         DrawCircle(x, y, radius, Light_Green);
     }
 
-    void Update(void){
+    void Update(Sound winSound, Sound lossSound){
+         
         x += speed_x;
         y += speed_y;
 
@@ -31,11 +36,15 @@ public:
 
         if (x+radius >= GetScreenWidth()) {
             player_score++;
+            PlaySound(winSound);
+            start_off = !start_off;
             Reset();
         }
 
         if (x-radius <= 0) {
             bot_score++;
+            PlaySound(lossSound);
+            start_off = !start_off;
             Reset();
         }
     }
@@ -45,6 +54,7 @@ public:
         y = GetScreenHeight()/2;
         
         int direction_rand[2] = {-1, 1};
+
         speed_x = 7 * direction_rand[GetRandomValue(0, 1)];
         speed_y = 7 * direction_rand[GetRandomValue(0, 1)];
     }
@@ -112,6 +122,13 @@ int main(void){
 
     InitWindow(screen_width, screen_height, "PongTae");
     SetTargetFPS(60);
+    InitAudioDevice();
+
+    Sound collisionSound = LoadSound("resources/hit.wav");
+    Sound winSound = LoadSound("resources/win.wav");
+    Sound lossSound = LoadSound("resources/loss.wav");
+
+    bool isPaused = false;
 
     ball.radius = 10;
     ball.x = screen_width/2;
@@ -135,32 +152,57 @@ int main(void){
         BeginDrawing();
 
         //update
-        ball.Update();
-        player.Update();
-        bot.Update(ball.y);
+        if(isPaused) {
+            DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.1f));
+            DrawText("PAUSED", GetScreenWidth()/2 - MeasureText("PAUSED", 20)/2, GetScreenHeight()/2, 20, WHITE);
+        }
+
+        else{
+            ball.Update(winSound, lossSound);
+            player.Update();
+            bot.Update(ball.y);
+        }
+        
+        if(IsKeyPressed(KEY_P)) {
+            isPaused = !isPaused;
+        }
 
         //collision
         if(CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{player.x, player.y, player.width, player.height})){
+            PlaySound(collisionSound);
             ball.speed_x *= -1.1;
         }
 
         if(CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{bot.x, bot.y, bot.width, bot.height})){
+            PlaySound(collisionSound);
             ball.speed_x *= -1.1;
         }
 
-        //drawing
-        ClearBackground(Dark_Blue);
-        DrawRectangle(screen_width/2, 0, screen_width/2, screen_height, Light_Blue);
-        DrawCircle(screen_width/2, screen_height/2, 150, Super_Light_Blue);
-        DrawLine(screen_width / 2, 0, screen_width / 2, screen_height, WHITE);
-        ball.Draw();
-        bot.Draw();
-        player.Draw();
-        DrawText(TextFormat("%i", player_score), screen_width/4 - 20, 20, 80, WHITE);
-        DrawText(TextFormat("%i", bot_score), 3 * screen_width/4 - 20, 20, 80, WHITE);
+        //drawing 
+        if(!isPaused) {
+            ClearBackground(Dark_Blue);
+            DrawRectangle(screen_width/2, 0, screen_width/2, screen_height, Light_Blue);
+            DrawCircle(screen_width/2, screen_height/2, 150, Super_Light_Blue);
+            DrawLine(screen_width / 2, 0, screen_width / 2, screen_height, WHITE);
+            ball.Draw();
+            bot.Draw();
+            player.Draw();
+            DrawText(TextFormat("%i", player_score), screen_width/4 - 20, 20, 80, WHITE);
+            DrawText(TextFormat("%i", bot_score), 3 * screen_width/4 - 20, 20, 80, WHITE);
+        }      
 
         EndDrawing();
+
+        //small pause
+        if(start_off){
+            std::this_thread::sleep_for(std::chrono::seconds(3));
+            start_off = !start_off;
+        }
     }
+
+    UnloadSound(collisionSound);
+    UnloadSound(winSound);
+    UnloadSound(lossSound);
 
     CloseWindow();
     return 0;
